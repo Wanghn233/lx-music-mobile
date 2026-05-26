@@ -1,0 +1,10 @@
+{
+  "applicationId": "com.luna.music",
+  "appName": "Luna Music",
+  "displayName": "Luna Music",
+  "packageName": "luna-music-mobile",
+  "repoOwner": "Wanghn233",
+  "repoName": "lx-music-mobile",
+  "workBranch": "fork-main",
+  "deeplinkScheme": "lunamusic"
+}

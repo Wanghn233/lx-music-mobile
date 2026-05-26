@@ -1,5 +1,5 @@
 import { httpGet } from '@/utils/request'
-import { author, name } from '../../package.json'
+import { author, forkConfig, name } from '../../package.json'
 import { downloadFile, stopDownload, temporaryDirectoryPath } from '@/utils/fs'
 import { getSupportedAbis, installApk } from '@/utils/nativeModules/utils'
 import { APP_PROVIDER_NAME } from '@/config/constant'
@@ -12,15 +12,15 @@ const abis = [
   'universal',
 ]
 
+const repoOwner = forkConfig?.repoOwner || author.name
+const repoName = forkConfig?.repoName || name
+const workBranch = forkConfig?.workBranch || 'fork-main'
+const artifactName = forkConfig?.packageName || name
 const address = [
-  [`https://raw.githubusercontent.com/${author.name}/${name}/master/publish/version.json`, 'direct'],
-  ['https://registry.npmjs.org/lx-music-mobile-version-info/latest', 'npm'],
-  [`https://cdn.jsdelivr.net/gh/${author.name}/${name}/publish/version.json`, 'direct'],
-  [`https://fastly.jsdelivr.net/gh/${author.name}/${name}/publish/version.json`, 'direct'],
-  [`https://gcore.jsdelivr.net/gh/${author.name}/${name}/publish/version.json`, 'direct'],
-  ['https://registry.npmmirror.com/lx-music-mobile-version-info/latest', 'npm'],
-  ['https://gitee.com/lyswhut/lx-music-mobile-versions/raw/master/version.json', 'direct'],
-  ['http://cdn.stsky.cn/lx-music/mobile/version.json', 'direct'],
+  [`https://raw.githubusercontent.com/${repoOwner}/${repoName}/${workBranch}/publish/version.json`, 'direct'],
+  [`https://cdn.jsdelivr.net/gh/${repoOwner}/${repoName}@${workBranch}/publish/version.json`, 'direct'],
+  [`https://fastly.jsdelivr.net/gh/${repoOwner}/${repoName}@${workBranch}/publish/version.json`, 'direct'],
+  [`https://gcore.jsdelivr.net/gh/${repoOwner}/${repoName}@${workBranch}/publish/version.json`, 'direct'],
 ]
 
 
@@ -45,28 +45,9 @@ const getDirectInfo = async(url) => {
   })
 }
 
-const getNpmPkgInfo = async(url) => {
-  return request(url).then(json => {
-    if (!json.versionInfo) throw new Error('failed')
-    const info = JSON.parse(json.versionInfo)
-    if (info.version == null) throw new Error('failed')
-    return info
-  })
-}
-
 export const getVersionInfo = async(index = 0) => {
-  const [url, source] = address[index]
-  let promise
-  switch (source) {
-    case 'direct':
-      promise = getDirectInfo(url)
-      break
-    case 'npm':
-      promise = getNpmPkgInfo(url)
-      break
-  }
-
-  return promise.catch(async(err) => {
+  const [url] = address[index]
+  return getDirectInfo(url).catch(async(err) => {
     index++
     if (index >= address.length) throw err
     return getVersionInfo(index)
@@ -86,8 +67,8 @@ let apkSavePath
 
 export const downloadNewVersion = async(version, onDownload = noop) => {
   const abi = await getTargetAbi()
-  const url = `https://github.com/${author.name}/${name}/releases/download/v${version}/${name}-v${version}-${abi}.apk`
-  let savePath = temporaryDirectoryPath + '/lx-music-mobile.apk'
+  const url = `https://github.com/${repoOwner}/${repoName}/releases/download/v${version}/${artifactName}-v${version}-${abi}.apk`
+  const savePath = `${temporaryDirectoryPath}/${artifactName}.apk`
 
   if (downloadJobId) stopDownload(downloadJobId)
 
@@ -97,14 +78,7 @@ export const downloadNewVersion = async(version, onDownload = noop) => {
     readTimeout: 30000,
     begin({ statusCode, contentLength }) {
       onDownload(contentLength, 0)
-      // switch (statusCode) {
-      //   case 200:
-      //   case 206:
-      //     break
-      //   default:
-      //     onDownload(null, contentLength, 0)
-      //     break
-      // }
+      void statusCode
     },
     progress({ contentLength, bytesWritten }) {
       onDownload(contentLength, bytesWritten)

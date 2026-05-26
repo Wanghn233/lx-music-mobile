@@ -1,5 +1,5 @@
 {
-  "name": "lx-music-mobile",
+  "name": "luna-music-mobile",
   "version": "1.8.4",
   "versionCode": 76,
   "private": true,
@@ -28,21 +28,21 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lyswhut/lx-music-mobile.git"
+    "url": "git+https://github.com/Wanghn233/lx-music-mobile.git"
   },
   "keywords": [
     "music-player",
     "react-native-app"
   ],
   "author": {
-    "name": "lyswhut",
+    "name": "Wanghn233",
     "email": "lyswhut@qq.com"
   },
   "license": "Apache-2.0",
   "bugs": {
-    "url": "https://github.com/lyswhut/lx-music-mobile/issues"
+    "url": "https://github.com/Wanghn233/lx-music-mobile/issues"
   },
-  "homepage": "https://github.com/lyswhut/lx-music-mobile#readme",
+  "homepage": "https://github.com/Wanghn233/lx-music-mobile#readme",
   "dependencies": {
     "@craftzdog/react-native-buffer": "^6.1.1",
     "@react-native-async-storage/async-storage": "~2.1.2",
@@ -100,5 +100,16 @@
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^9"
     }
+  },
+  "forkConfig": {
+    "applicationId": "com.luna.music",
+    "appName": "Luna Music",
+    "deeplinkScheme": "lunamusic",
+    "displayName": "Luna Music",
+    "packageName": "luna-music-mobile",
+    "providerAuthority": "com.luna.music.provider",
+    "repoName": "lx-music-mobile",
+    "repoOwner": "Wanghn233",
+    "workBranch": "fork-main"
   }
 }

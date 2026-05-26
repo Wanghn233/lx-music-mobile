@@ -1,0 +1,165 @@
+name: Fork Sync Build
+
+on:
+  push:
+    branches:
+      - fork-main
+  schedule:
+    - cron: '35 3 * * *'
+  workflow_dispatch:
+    inputs:
+      sync_upstream:
+        description: Sync upstream master before building
+        required: false
+        default: true
+        type: boolean
+      create_release:
+        description: Create a GitHub Release when the tag does not exist
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-sync-build
+  cancel-in-progress: false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out git repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync upstream master
+        if: ${{ github.event_name != 'push' && (github.event_name != 'workflow_dispatch' || inputs.sync_upstream) }}
+        shell: bash
+        run: |
+          if git remote get-url upstream >/dev/null 2>&1; then
+            git remote set-url upstream https://github.com/lyswhut/lx-music-mobile.git
+          else
+            git remote add upstream https://github.com/lyswhut/lx-music-mobile.git
+          fi
+          git fetch upstream master
+          git merge --no-edit upstream/master
+
+      - name: Rebrand fork files
+        shell: bash
+        run: node scripts/rebrand-fork.mjs
+        env:
+          FORK_REPO_OWNER: ${{ github.repository_owner }}
+          FORK_REPO_NAME: ${{ github.event.repository.name }}
+          FORK_WORK_BRANCH: fork-main
+
+      - name: Commit sync and rebrand changes
+        id: commit_changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git add .
+          git commit -m "chore: sync upstream and rebrand"
+          git push origin HEAD:fork-main
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Decide whether to build
+        id: build_gate
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ steps.commit_changes.outputs.changed }}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup Env
+        if: ${{ steps.build_gate.outputs.build == 'true' }}
+        uses: ./.github/actions/setup
+
+      - name: Read package metadata
+        if: ${{ steps.build_gate.outputs.build == 'true' }}
+        shell: bash
+        run: |
+          PACKAGE_NAME=$(node -p 'require("./package.json").name')
+          PACKAGE_VERSION=$(node -p 'require("./package.json").version')
+          echo "PACKAGE_NAME=${PACKAGE_NAME}" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Build Android release
+        if: ${{ steps.build_gate.outputs.build == 'true' }}
+        env:
+          DISABLE_SVG: 1
+          KEYSTORE_KEY_ALIAS: ${{ secrets.KEYSTORE_KEY_ALIAS }}
+          KEYSTORE_KEY_PASSWORD: ${{ secrets.KEYSTORE_KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEYSTORE_STORE_FILE: ${{ secrets.KEYSTORE_STORE_FILE }}
+          KEYSTORE_STORE_FILE_BASE64: ${{ secrets.KEYSTORE_STORE_FILE_BASE64 }}
+        shell: bash
+        run: |
+          cd android
+
+          if [ -n "${KEYSTORE_STORE_FILE_BASE64}" ]; then
+            echo "${KEYSTORE_STORE_FILE_BASE64}" | base64 --decode > "app/${KEYSTORE_STORE_FILE}"
+            STORE_FILE="${KEYSTORE_STORE_FILE}"
+            KEY_ALIAS="${KEYSTORE_KEY_ALIAS}"
+            STORE_PASSWORD="${KEYSTORE_PASSWORD}"
+            KEY_PASSWORD="${KEYSTORE_KEY_PASSWORD}"
+          else
+            STORE_FILE="app/debug.keystore"
+            KEY_ALIAS="androiddebugkey"
+            STORE_PASSWORD="android"
+            KEY_PASSWORD="android"
+          fi
+
+          ./gradlew assembleRelease \
+            -PMYAPP_UPLOAD_STORE_FILE="${STORE_FILE}" \
+            -PMYAPP_UPLOAD_KEY_ALIAS="${KEY_ALIAS}" \
+            -PMYAPP_UPLOAD_STORE_PASSWORD="${STORE_PASSWORD}" \
+            -PMYAPP_UPLOAD_KEY_PASSWORD="${KEY_PASSWORD}"
+
+          if [ -n "${KEYSTORE_STORE_FILE_BASE64}" ]; then
+            rm -f "app/${KEYSTORE_STORE_FILE}"
+          fi
+
+      - name: Upload APK artifacts
+        if: ${{ steps.build_gate.outputs.build == 'true' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-v${{ env.PACKAGE_VERSION }}
+          path: android/app/build/outputs/apk/release/${{ env.PACKAGE_NAME }}-v${{ env.PACKAGE_VERSION }}-*.apk
+
+      - name: Check whether the release tag already exists
+        if: ${{ steps.build_gate.outputs.build == 'true' }}
+        id: tag_check
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${PACKAGE_VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create GitHub Release
+        if: ${{ steps.build_gate.outputs.build == 'true' && steps.tag_check.outputs.exists == 'false' && (github.event_name != 'workflow_dispatch' || inputs.create_release) }}
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: ./publish/changeLog.md
+          draft: false
+          prerelease: false
+          tag_name: v${{ env.PACKAGE_VERSION }}
+          files: android/app/build/outputs/apk/release/${{ env.PACKAGE_NAME }}-v${{ env.PACKAGE_VERSION }}-*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
