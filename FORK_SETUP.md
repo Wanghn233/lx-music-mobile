@@ -82,20 +82,21 @@
 
 ## 触发方式
 
-`Fork Sync Build` 这个 workflow 会在下面几种场景触发：
+`Fork Stable Tag Release` 这个 workflow 会在下面几种场景触发：
 
-- 你手动 push 到 `fork-main`
 - 你手动点 `workflow_dispatch`
 - 每天定时同步一次上游
 
 定时和手动同步时会先：
 
-1. 拉 `lyswhut/lx-music-mobile` 的 `master`
+1. 拉 `lyswhut/lx-music-mobile` 的最新稳定 tag
 2. merge 到 `fork-main`
 3. 重新执行 `scripts/rebrand-fork.mjs`
 4. 如果有变化就自动提交
 5. 打 APK
-6. 如果当前版本 tag 不存在就自动发 Release
+6. 只有当你的 fork 里还没有这个同名 tag 时，才创建 Release
+
+这里的“稳定 tag”默认指 `v1.8.4` 这种形式，不会跟 `master` 上尚未打 tag 的提交，也不会默认跟 `-sl` 这类变体 tag。
 
 ## 一个边界
 

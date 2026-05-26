@@ -1,20 +1,12 @@
-name: Fork Sync Build
+name: Fork Stable Tag Release
 
 on:
-  push:
-    branches:
-      - fork-main
   schedule:
     - cron: '35 3 * * *'
   workflow_dispatch:
     inputs:
-      sync_upstream:
-        description: Sync upstream master before building
-        required: false
-        default: true
-        type: boolean
       create_release:
-        description: Create a GitHub Release when the tag does not exist
+        description: Create a GitHub Release when a new upstream stable tag is found
         required: false
         default: true
         type: boolean
@@ -41,8 +33,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Sync upstream master
-        if: ${{ github.event_name != 'push' && (github.event_name != 'workflow_dispatch' || inputs.sync_upstream) }}
+      - name: Configure upstream remote
         shell: bash
         run: |
           if git remote get-url upstream >/dev/null 2>&1; then
@@ -50,8 +41,21 @@ jobs:
           else
             git remote add upstream https://github.com/lyswhut/lx-music-mobile.git
           fi
-          git fetch upstream master
-          git merge --no-edit upstream/master
+
+      - name: Sync latest upstream stable tag
+        shell: bash
+        run: |
+          git fetch upstream --force --tags
+          LATEST_UPSTREAM_TAG=$(git ls-remote --tags --refs upstream | awk '{print $2}' | sed 's#refs/tags/##' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1)
+
+          if [ -z "${LATEST_UPSTREAM_TAG}" ]; then
+            echo "No stable upstream tag found" >&2
+            exit 1
+          fi
+
+          echo "LATEST_UPSTREAM_TAG=${LATEST_UPSTREAM_TAG}" >> "$GITHUB_ENV"
+          git fetch --force upstream "refs/tags/${LATEST_UPSTREAM_TAG}:refs/tags/${LATEST_UPSTREAM_TAG}"
+          git merge --no-edit "${LATEST_UPSTREAM_TAG}"
 
       - name: Rebrand fork files
         shell: bash
@@ -71,15 +75,45 @@ jobs:
           fi
 
           git add .
-          git commit -m "chore: sync upstream and rebrand"
+          git commit -m "chore: sync ${LATEST_UPSTREAM_TAG} and rebrand"
           git push origin HEAD:fork-main
           echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Read package metadata
+        shell: bash
+        run: |
+          PACKAGE_NAME=$(node -p 'require("./package.json").name')
+          PACKAGE_VERSION=$(node -p 'require("./package.json").version')
+          echo "PACKAGE_NAME=${PACKAGE_NAME}" >> "$GITHUB_ENV"
+          echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> "$GITHUB_ENV"
+
+      - name: Verify package version matches upstream tag
+        id: version_match
+        shell: bash
+        run: |
+          if [ "v${PACKAGE_VERSION}" = "${LATEST_UPSTREAM_TAG}" ]; then
+            echo "matches=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Package version ${PACKAGE_VERSION} does not match upstream tag ${LATEST_UPSTREAM_TAG}" >&2
+            echo "matches=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+      - name: Check whether the fork release tag already exists
+        id: fork_tag_check
+        shell: bash
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/v${PACKAGE_VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Decide whether to build
         id: build_gate
         shell: bash
         run: |
-          if [ "${{ github.event_name }}" = "push" ] || [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "${{ steps.commit_changes.outputs.changed }}" = "true" ]; then
+          if [ "${{ steps.commit_changes.outputs.changed }}" = "true" ] || [ "${{ steps.fork_tag_check.outputs.exists }}" = "false" ]; then
             echo "build=true" >> "$GITHUB_OUTPUT"
           else
             echo "build=false" >> "$GITHUB_OUTPUT"
@@ -88,15 +122,6 @@ jobs:
       - name: Setup Env
         if: ${{ steps.build_gate.outputs.build == 'true' }}
         uses: ./.github/actions/setup
-
-      - name: Read package metadata
-        if: ${{ steps.build_gate.outputs.build == 'true' }}
-        shell: bash
-        run: |
-          PACKAGE_NAME=$(node -p 'require("./package.json").name')
-          PACKAGE_VERSION=$(node -p 'require("./package.json").version')
-          echo "PACKAGE_NAME=${PACKAGE_NAME}" >> "$GITHUB_ENV"
-          echo "PACKAGE_VERSION=${PACKAGE_VERSION}" >> "$GITHUB_ENV"
 
       - name: Build Android release
         if: ${{ steps.build_gate.outputs.build == 'true' }}
@@ -141,19 +166,8 @@ jobs:
           name: apk-v${{ env.PACKAGE_VERSION }}
           path: android/app/build/outputs/apk/release/${{ env.PACKAGE_NAME }}-v${{ env.PACKAGE_VERSION }}-*.apk
 
-      - name: Check whether the release tag already exists
-        if: ${{ steps.build_gate.outputs.build == 'true' }}
-        id: tag_check
-        shell: bash
-        run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/v${PACKAGE_VERSION}" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Create GitHub Release
-        if: ${{ steps.build_gate.outputs.build == 'true' && steps.tag_check.outputs.exists == 'false' && (github.event_name != 'workflow_dispatch' || inputs.create_release) }}
+        if: ${{ steps.build_gate.outputs.build == 'true' && steps.version_match.outputs.matches == 'true' && steps.fork_tag_check.outputs.exists == 'false' && (github.event_name != 'workflow_dispatch' || inputs.create_release) }}
         uses: softprops/action-gh-release@v2
         with:
           body_path: ./publish/changeLog.md
