@@ -179,17 +179,9 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Keepalive
-        # GitHub 会在仓库 60 天无活动后自动禁用 schedule workflow（此前已触发过：disabled_inactivity）。
-        # 仓库闲置超 45 天时打一个 [skip ci] 空提交保活，不依赖第三方 action
+        # GitHub 会在仓库 60 天无活动后自动禁用 schedule workflow（此前已触发过），
+        # 用 keepalive 在临近闲置时保活（默认 [skip ci] 空提交）
         if: always()
-        shell: bash
-        run: |
-          LAST_COMMIT_TS=$(git log -1 --format=%ct)
-          NOW_TS=$(date +%s)
-          AGE_DAYS=$(( (NOW_TS - LAST_COMMIT_TS) / 86400 ))
-          if [ "$AGE_DAYS" -ge 45 ]; then
-            git commit --allow-empty -m "chore: keepalive [skip ci]"
-            git push origin HEAD:fork-main
-          else
-            echo "Last commit ${AGE_DAYS} days ago, no keepalive needed"
-          fi
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          use_api: true
