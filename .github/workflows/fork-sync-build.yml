@@ -177,11 +177,3 @@ jobs:
           files: android/app/build/outputs/apk/release/${{ env.PACKAGE_NAME }}-v${{ env.PACKAGE_VERSION }}-*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Keepalive
-        # GitHub 会在仓库 60 天无活动后自动禁用 schedule workflow（此前已触发过），
-        # 用 keepalive 在临近闲置时保活（默认 [skip ci] 空提交）
-        if: always()
-        uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          use_api: true
