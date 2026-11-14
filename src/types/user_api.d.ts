@@ -23,6 +23,8 @@ declare namespace LX {
       homepage: string
       version: string
       sources?: UserApiSources
+      /** 在线导入的脚本来源地址，用于自动检查更新；本地导入无此字段 */
+      sourceUrl?: string
     }
 
     interface UserApiStatus {

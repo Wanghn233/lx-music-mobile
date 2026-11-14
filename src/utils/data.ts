@@ -551,17 +551,29 @@ const matchInfo = (scriptInfo: string) => {
 
   return infos as Record<keyof typeof INFO_NAMES, string>
 }
-export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo> => {
+const parseUserApiScriptInfo = (script: string): Omit<LX.UserApi.UserApiInfo, 'id' | 'allowShowUpdateAlert' | 'sourceUrl'> => {
   const result = /^\/\*[\S|\s]+?\*\//.exec(script)
   if (!result) throw new Error(global.i18n.t('user_api_add_failed_tip'))
 
-  let scriptInfo = matchInfo(result[0])
+  const scriptInfo = matchInfo(result[0])
 
   scriptInfo.name ||= `user_api_${new Date().toLocaleString()}`
+  return scriptInfo
+}
+export const addUserApi = async(script: string, sourceUrl?: string): Promise<LX.UserApi.UserApiInfo> => {
+  const scriptInfo = parseUserApiScriptInfo(script)
+
+  // 同一来源地址重复导入（存量源接入自动更新的迁移方式）：原地更新脚本与信息，不再新增条目
+  if (sourceUrl) {
+    const target = userApis.find(api => api.sourceUrl === sourceUrl)
+    if (target) return updateUserApiScript(target.id, script)
+  }
+
   const apiInfo: LX.UserApi.UserApiInfo = {
     id: `user_api_${Math.random().toString().substring(2, 5)}_${Date.now()}`,
     ...scriptInfo,
     allowShowUpdateAlert: true,
+    ...(sourceUrl ? { sourceUrl } : {}),
   }
   userApis.push(apiInfo)
   await saveDataMultiple([
@@ -569,6 +581,22 @@ export const addUserApi = async(script: string): Promise<LX.UserApi.UserApiInfo>
     [`${userApiPrefix}${apiInfo.id}`, script],
   ])
   return apiInfo
+}
+// 替换脚本内容并同步刷新列表中的名称、版本等元信息（保留 allowShowUpdateAlert/sourceUrl/id），供自动更新使用
+export const updateUserApiScript = async(id: string, script: string): Promise<LX.UserApi.UserApiInfo> => {
+  const index = userApis.findIndex(api => api.id === id)
+  if (index < 0) throw new Error('user api not found: ' + id)
+  const scriptInfo = parseUserApiScriptInfo(script)
+  const updatedInfo: LX.UserApi.UserApiInfo = {
+    ...userApis[index],
+    ...scriptInfo,
+  }
+  userApis[index] = updatedInfo
+  await saveDataMultiple([
+    [userApiPrefix, userApis],
+    [`${userApiPrefix}${id}`, script],
+  ])
+  return updatedInfo
 }
 export const removeUserApi = async(ids: string[]) => {
   if (!userApis) return []

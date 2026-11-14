@@ -1,5 +1,5 @@
 import { action, state } from '@/store/userApi'
-import { addUserApi, getUserApiScript, removeUserApi as removeUserApiFromStore, setUserApiAllowShowUpdateAlert as setUserApiAllowShowUpdateAlertFromStore } from '@/utils/data'
+import { addUserApi, getUserApiList, getUserApiScript, removeUserApi as removeUserApiFromStore, setUserApiAllowShowUpdateAlert as setUserApiAllowShowUpdateAlertFromStore } from '@/utils/data'
 import { destroy, loadScript } from '@/utils/nativeModules/userApi'
 import { log as writeLog } from '@/utils/log'
 
@@ -27,9 +27,10 @@ export const setUserApiList: typeof action['setUserApiList'] = (list) => {
   action.setUserApiList(list)
 }
 
-export const importUserApi = async(script: string) => {
-  const info = await addUserApi(script)
-  action.addUserApi(info)
+export const importUserApi = async(script: string, sourceUrl?: string) => {
+  await addUserApi(script, sourceUrl)
+  // 同源重复导入会原地更新而非新增条目，这里统一刷新列表
+  setUserApiList(await getUserApiList())
 }
 
 export const removeUserApi = async(ids: string[]) => {

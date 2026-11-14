@@ -7,6 +7,7 @@ import { useI18n } from '@/lang'
 import { useUserApiList, state as userApiState } from '@/store/userApi'
 import { useSettingValue } from '@/store/setting/hook'
 import { removeUserApi, setUserApiAllowShowUpdateAlert } from '@/core/userApi'
+import { updateSetting } from '@/core/common'
 import { BorderRadius } from '@/theme'
 import CheckBox from '@/components/common/CheckBox'
 import { Icon } from '@/components/common/Icon'
@@ -76,6 +77,7 @@ export interface UserApiEditModalType {
 export default () => {
   const userApiList = useUserApiList()
   const apiSource = useSettingValue('common.apiSource')
+  const isAutoUpdate = useSettingValue('common.isAutoUpdateUserApi')
   const theme = useTheme()
   const t = useI18n()
 
@@ -102,6 +104,12 @@ export default () => {
   return (
     <ScrollView style={styles.scrollView} keyboardShouldPersistTaps={'always'}>
       <View onStartShouldSetResponder={() => true}>
+        <CheckBox
+          check={isAutoUpdate}
+          label={t('user_api_auto_update_enable')}
+          onChange={enable => { updateSetting({ 'common.isAutoUpdateUserApi': enable }) }}
+          size={0.86}
+        />
         {
           userApiList.length
             ? userApiList.map((item) => {

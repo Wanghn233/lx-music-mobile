@@ -477,6 +477,8 @@
   "user_api__init_failed_alert": "自訂來源 API「{name}」初始化失敗：",
   "user_api_add_failed_tip": "無效的自訂來源 API 檔案",
   "user_api_allow_show_update_alert": "允許顯示更新彈出視窗",
+  "user_api_auto_update_enable": "自動更新線上自訂源",
+  "user_api_auto_updated_tip": "自訂音源「{name}」已自動更新到 {version}",
   "user_api_btn_import": "匯入",
   "user_api_btn_import_local": "從本機匯入",
   "user_api_btn_import_online": "從線上匯入",

@@ -1,5 +1,6 @@
 import { type InitParams, onScriptAction, sendAction, type ResponseParams, type UpdateInfoParams, type RequestParams } from '@/utils/nativeModules/userApi'
 import { log, setUserApiList, setUserApiStatus } from '@/core/userApi'
+import { initUserApiAutoUpdate } from '@/core/userApiUpdate'
 import settingState from '@/store/setting/state'
 import BackgroundTimer from 'react-native-background-timer'
 import { fetchData } from './request'
@@ -253,4 +254,5 @@ export default async(setting: LX.AppSetting) => {
   })
 
   setUserApiList(await getUserApiList())
+  initUserApiAutoUpdate()
 }

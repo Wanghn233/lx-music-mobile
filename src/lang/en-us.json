@@ -477,6 +477,8 @@
   "user_api__init_failed_alert": "Failed to initialize Music API \"{name}\":",
   "user_api_add_failed_tip": "Invalid Music API file",
   "user_api_allow_show_update_alert": "Allow show update popups",
+  "user_api_auto_update_enable": "Auto update online custom sources",
+  "user_api_auto_updated_tip": "Custom source \"{name}\" auto-updated to {version}",
   "user_api_btn_import": "Import",
   "user_api_btn_import_local": "From Local",
   "user_api_btn_import_online": "From Network",

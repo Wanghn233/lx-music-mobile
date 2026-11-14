@@ -22,6 +22,11 @@ declare global {
       'common.apiSource': string
 
       /**
+       * 是否自动更新在线导入的自定义源
+       */
+      'common.isAutoUpdateUserApi': boolean
+
+      /**
        * 音源名称类型，原名、别名
        */
       'common.sourceNameType': 'alias' | 'real'
